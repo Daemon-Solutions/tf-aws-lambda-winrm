@@ -9,9 +9,13 @@ Usage
 Create a text file with the following contents:-
 
   `target=foo:bar`
+
   `scriptblock=@`
+
   `add-WindowsFeature telnet-client`
+
   `add-WindowsFeature TFTP-Client`
+  
   `@`
 
 Dropping the above file into the winrm s3 bucket will trigger a lambda function.
