@@ -1,4 +1,4 @@
-tf-aws-winrm
+tf-aws-lambda-winrm
 ============
 
 This module provides you with a mechanism to send powershell commands to a ec2 windows instance. The module utilises the pywinrm library, lambda, and s3. 
@@ -15,7 +15,7 @@ Create a text file with the following contents:-
   `add-WindowsFeature telnet-client`
 
   `add-WindowsFeature TFTP-Client`
-  
+
   `@`
 
 Dropping the above file into the winrm s3 bucket will trigger a lambda function.
