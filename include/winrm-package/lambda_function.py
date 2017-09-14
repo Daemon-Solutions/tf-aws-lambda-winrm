@@ -30,7 +30,7 @@ def read_s3_object(bucket,key):
     return contents
 
 def execute_winrm(target, script_block, username, password):
-    s = winrm.Session(target, auth=(username, password))
+    s = winrm.Session(target, auth=(username, password), transport='ssl', server_cert_validation='ignore')
     ps_script = script_block
     r = s.run_ps(ps_script)
     print (r.std_out)
