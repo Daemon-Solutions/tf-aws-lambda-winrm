@@ -3,6 +3,8 @@ tf-aws-lambda-winrm
 
 This module provides you with a mechanism to send powershell commands to a ec2 windows instance. The module utilises the pywinrm library, lambda, and s3. 
 
+14/09/2017 - Module now supports SSL 
+
 Usage
 -----
 
@@ -27,15 +29,37 @@ Output of all commands are written to the Lambda Winrm Cloudwtach log group.
 Prerequisites
 -------------
 
-Instance must have the folllowing configured
+Instance must have the folllowing configured :-
 
-`winrm set winrm/config/service @{AllowUnencrypted="true"}`
+`$hostname=$env:COMPUTERNAME`
 
-`winrm quickconfig`
+`$ss_cert=New-SelfSignedCertificate -DnsName $hostname -CertStoreLocation Cert:\LocalMachine\My`
 
-`winrm set winrm/config/service/auth @{Basic="true"}`
+`$sqldb = 'winrm'`
+
+`$myarg = "create winrm/config/Listener?Address=*+Transport=HTTPS @{Hostname=""" + $hostname + """`
+
+`CertificateThumbprint="""+ $ss_cert.thumbprint + """}"`
+
+`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -Wait`
+
+`$myarg = "delete winrm/config/listener?Address=*+Transport=HTTPS"`
+
+`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
+
+`$myarg = 'set winrm/config/client/auth @{Basic="true"}'`
+
+`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
+
+`$myarg =  'set winrm/config/service/auth @{Basic="true"}'`
+
+`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
+
+`$myarg =  'set winrm/config/service @{AllowUnencrypted="false"}'`
 
 `local username and password that matches the vars set in terraform`
+
+`New-NetFirewallRule -DisplayName "WinRM inbound Port 5986" -Direction inbound -LocalPort 5986 -Protocol TCP -Action Allow`
 
 future development tasks
 ------------------------
