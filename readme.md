@@ -1,68 +1,69 @@
 tf-aws-lambda-winrm
-============
+-----
 
-This module provides you with a mechanism to send powershell commands to a ec2 windows instance. The module utilises the pywinrm library, lambda, and s3. 
+Mechanism to target ec2 Windows instances with a PowerShell scriptblock.
 
-14/09/2017 - Module now supports SSL 
+This module utilises the pywinrm library, Lambda, and s3.
 
 Usage
 -----
+Create a text file similar to the below:
 
-Create a text file with the following contents:-
+```
+target=foo:bar
+scriptblock=@
+    Add-WindowsFeature telnet-client;
+    Add-WindowsFeature TFTP-Client;
+@
+```
 
-  `target=foo:bar`
+* Placing the above file into the WinRM s3 bucket will trigger a Lambda function.
+* The Lambda function will target all instances with a tag `name:value` of `foo:bar`, executing the contents of the `scriptblock` parameter above.
+* Output of all commands are written to the Lambda WinRM CloudWatch log group.
 
-  `scriptblock=@`
-
-  `add-WindowsFeature telnet-client`
-
-  `add-WindowsFeature TFTP-Client`
-
-  `@`
-
-Dropping the above file into the winrm s3 bucket will trigger a lambda function.
-
-The lambda function will target all instances with a Tag of `foo` and a tag value of `bar`. It will then apply the script block between the 2 `@`s.
-
-Output of all commands are written to the Lambda Winrm Cloudwtach log group.
 
 Prerequisites
 -------------
+You must have a local credential which matches the variables in your terraform configuration, as well as having the following WinRM configuration applied on the instance:
 
-Instance must have the folllowing configured :-
+```PowerShell
+# Create the new TLS certificate
+$Certificate = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation "Cert:\LocalMachine\My";
 
-`$hostname=$env:COMPUTERNAME`
+# Queue up and execute some WinRM commands
+$WinRMCommands = @(
+    [String]::Format('create winrm/config/Listener?Address=*+Transport=HTTPS @{Hostname="{0}";CertificateThumbprint="{1}"}',$env:COMPUTERNAME,$Certificate.Thumbprint),
+    "delete winrm/config/listener?Address=*+Transport=HTTPS",
+    'set winrm/config/client/auth @{Basic="true"}',
+    'set winrm/config/service/auth @{Basic="true"}',
+    'set winrm/config/service @{AllowUnencrypted="false"}'
+)| %{
+    Start-Process "winrm" -ArgumentList $_ -NoNewWindow -PassThru -Wait;
+}
 
-`$ss_cert=New-SelfSignedCertificate -DnsName $hostname -CertStoreLocation Cert:\LocalMachine\My`
+# Create a firewall rule for WinRM over HTTPS
+New-NetFirewallRule -DisplayName "Windows Remote Management (HTTPS-In)" -Direction Inbound -LocalPort 5986 -Protocol TCP -Action Allow;
+```
 
-`$sqldb = 'winrm'`
+Variables
+---------
+_Variables marked with **[*]** are mandatory._
 
-`$myarg = "create winrm/config/Listener?Address=*+Transport=HTTPS @{Hostname=""" + $hostname + """`
+ - `customer` - The name prefix for resources created by this module. **[*]**
+ - `envname` - The value for the `Environment` tag on the AWS Security Group rule. **[*]**
+ - `envtype` - The value for the `Envtype` tag on the AWS Security Group rule, and the second part of the S3 bucket name. **[*]**
+ - `lambda_subnets` - A List of subnet IDs associated with the Lambda function. [Default: `[]`]
+ - `lambda_sgs` - A list of security group IDs associated with the Lambda function. [Default: `[]`]
+ - `vpc_id` - The VPC ID for the Security Group rule to allow WinRM traffic. **[*]**
+ - `username` - The username of a Windows account to connect to ec2 instances with.  **[*]**
+ - `password` - The password for the Windows user account specified in `username`. **[*]**
 
-`CertificateThumbprint="""+ $ss_cert.thumbprint + """}"`
+Outputs
+-------
+ - `winrm_sg` - The ID for the WinRM security group.
 
-`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -Wait`
-
-`$myarg = "delete winrm/config/listener?Address=*+Transport=HTTPS"`
-
-`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
-
-`$myarg = 'set winrm/config/client/auth @{Basic="true"}'`
-
-`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
-
-`$myarg =  'set winrm/config/service/auth @{Basic="true"}'`
-
-`Start-Process $sqldb -ArgumentList $myarg -NoNewWindow -PassThru -wait`
-
-`$myarg =  'set winrm/config/service @{AllowUnencrypted="false"}'`
-
-`local username and password that matches the vars set in terraform`
-
-`New-NetFirewallRule -DisplayName "WinRM inbound Port 5986" -Direction inbound -LocalPort 5986 -Protocol TCP -Action Allow`
-
-future development tasks
+Future development tasks
 ------------------------
-read password from secure ssm parameter store
-enable targetting by wildcards, ips and AZs
-add scheduled trigger to allow re-application of powershell (drift control)
+* Read password from secure SSM parameter store
+* Enable targeting by wildcards, IPs and AZs
+* Add scheduled trigger to allow re-application of PowerShell (drift control)
